@@ -1,34 +1,18 @@
-/**
- * @file display.ino
- * @author SeanKwok (shaoxiang@m5stack.com)
- * @brief M5Cardputer Display Test
- * @version 0.1
- * @date 2023-10-09
- *
- *
- * @Hardwares: M5Cardputer
- * @Platform Version: Arduino M5Stack Board Manager v2.0.7
- * @Dependent Library:
- * M5GFX: https://github.com/m5stack/M5GFX
- * M5Unified: https://github.com/m5stack/M5Unified
- */
+
 #include "M5Cardputer.h"
-
-/**
-  Simple hello world for small3dlib. Renders a triangle in terminal as ASCII.
-
-  by drummyfish, released under CC0 1.0, public domain
-*/
-
-/*
-  Example program for small3dlib -- a GTA-like game demo.
-
-  author: Miloslav Ciz
-  license: CC0 1.0
-*/
-
+#include <TFT_eSPI.h>
 #include <stdio.h>
 #include <time.h>
+
+#define USE_DMA_TO_TFT
+
+#define COLOR_DEPTH 16
+
+#define DELAY 1000
+
+TFT_eSPI tft = TFT_eSPI(); // Declare object "tft"
+
+TFT_eSprite spr = TFT_eSprite(&tft);
 
 #define S3L_FLAT 0
 #define S3L_NEAR_CROSS_STRATEGY 3
@@ -39,7 +23,7 @@
 
 #define S3L_PIXEL_FUNCTION drawPixel
 
-#define S3L_RESOLUTION_X 249
+#define S3L_RESOLUTION_X 240
 #define S3L_RESOLUTION_Y 135
 
 #include "small3dlib.h"
@@ -69,22 +53,24 @@ S3L_Scene scene;
 uint32_t frame = 0;
 
 void clearScreenBlue() {
-  uint32_t index = 0;
+  // uint32_t index = 0;
 
-  for (uint16_t y = 0; y < S3L_RESOLUTION_Y; ++y) {
-    S3L_Unit t = S3L_min(S3L_F, ((y * S3L_F) / S3L_RESOLUTION_Y) * 4);
+  // for (uint16_t y = 0; y < S3L_RESOLUTION_Y; ++y) {
+  //   S3L_Unit t = S3L_min(S3L_F, ((y * S3L_F) / S3L_RESOLUTION_Y) * 4);
 
-    uint32_t r = S3L_interpolateByUnit(200, 242, t);
-    uint32_t g = S3L_interpolateByUnit(102, 255, t);
-    uint32_t b = S3L_interpolateByUnit(255, 230, t);
+  //   uint32_t r = S3L_interpolateByUnit(200, 242, t);
+  //   uint32_t g = S3L_interpolateByUnit(102, 255, t);
+  //   uint32_t b = S3L_interpolateByUnit(255, 230, t);
 
-    // convert r,g,b to 16 bit color
-    uint32_t color16 = M5Cardputer.Display.color565(r, g, b);
-    for (uint16_t x = 0; x < S3L_RESOLUTION_X; ++x) {
-      M5Cardputer.Display.drawPixel(x, y, color16);
-      index++;
-    }
-  }
+  //   // convert r,g,b to 16 bit color
+  //   uint32_t color16 = M5Cardputer.Display.color565(r, g, b);
+  //   for (uint16_t x = 0; x < S3L_RESOLUTION_X; ++x) {
+  //     M5Cardputer.Display.drawPixel(x, y, color16);
+  //     index++;
+  //   }
+  // }
+  // M5Cardputer.Display.clear();
+  spr.fillScreen(TFT_BLUE);
 }
 
 uint32_t previousTriangle = -1;
@@ -132,7 +118,7 @@ void drawPixel(S3L_PixelInfo *p) {
 
   sampleTexture(cityTexture, uv[0] >> 1, uv[1] >> 1, &r, &g, &b);
   uint32_t color16 = M5Cardputer.Display.color565(r, g, b);
-  M5Cardputer.Display.drawPixel(p->x, p->y, color16);
+  spr.drawPixel(p->x, p->y, color16);
 }
 
 void draw() {
@@ -166,7 +152,7 @@ static inline void handleCollision(S3L_Vec4 *pos, S3L_Vec4 previousPos) {
 }
 
 int16_t fps = 0;
-
+int16_t fps2 = 0;
 int setupSmall3d(void) {
 
   cityModelInit();
@@ -177,7 +163,7 @@ int setupSmall3d(void) {
 
   S3L_sceneInit(models, 2, &scene);
 
-  S3L_transform3DSet(1909, 16, -3317, 0, -510, 0, 512, 512, 512,
+  S3L_transform3DSet(1800, 16, -3317, 0, -510, 0, 512, 512, 512,
                      &(models[1].transform));
 
   int running = 1;
@@ -195,13 +181,14 @@ int setupSmall3d(void) {
 
   int16_t velocity = 0;
 
-  while (running) // main loop
+  while (1) // main loop
   {
     clock_t frameStartT = clock();
 
     models[1].transform.rotation.y +=
         models[1].transform.rotation.z; // overturn the car for the rendering
-
+    
+    // Serial.println("update");
     draw();
 
     models[1].transform.rotation.y -=
@@ -214,12 +201,14 @@ int setupSmall3d(void) {
     double timeDiff = ((double)(nowT - nextPrintT)) / CLOCKS_PER_SEC;
     double frameDiff = ((double)(nowT - frameStartT)) / CLOCKS_PER_SEC;
     int16_t frameDiffMs = frameDiff * 1000;
-
+    // Serial.printf("timeDiff: %f\n", timeDiff);
     if (timeDiff >= 1.0) {
       nextPrintT = nowT;
-      printf("FPS: %d\n", fps);
+      // Serial.printf("FPS: %d\n", fps);
+      fps2 = fps;
       fps = 0;
     }
+    spr.drawString("FPS: " + String(fps2), 10, 0);
 
     int16_t step = (velocity * frameDiffMs) / 1000;
     int16_t stepFriction = (FRICTION * frameDiffMs) / 1000;
@@ -233,22 +222,19 @@ int setupSmall3d(void) {
 
     if (velocity < 0)
       stepRotation *= -1;
-
-    // if (state[SDL_SCANCODE_ESCAPE])
-    //   running = 0;
-    // else if (state[SDL_SCANCODE_LEFT]) {
-    //   models[1].transform.rotation.y += stepRotation;
-    //   models[1].transform.rotation.z =
-    //       S3L_min(S3L_abs(velocity) / 64, models[1].transform.rotation.z +
-    //       1);
-    // } else if (state[SDL_SCANCODE_RIGHT]) {
-    //   models[1].transform.rotation.y -= stepRotation;
-    //   models[1].transform.rotation.z =
-    //       S3L_max(-S3L_abs(velocity) / 64, models[1].transform.rotation.z -
-    //       1);
-    // } else
-    //   models[1].transform.rotation.z = (models[1].transform.rotation.z * 3) /
-    //   4;
+    M5Cardputer.update();
+    if (M5Cardputer.Keyboard.isKeyPressed(KEY_BACKSPACE))
+      running = 0;
+    else if (M5Cardputer.Keyboard.isKeyPressed(',')) {
+      models[1].transform.rotation.y += stepRotation;
+      models[1].transform.rotation.z =
+          S3L_min(S3L_abs(velocity) / 64, models[1].transform.rotation.z + 1);
+    } else if (M5Cardputer.Keyboard.isKeyPressed('/')) {
+      models[1].transform.rotation.y -= stepRotation;
+      models[1].transform.rotation.z =
+          S3L_max(-S3L_abs(velocity) / 64, models[1].transform.rotation.z - 1);
+    } else
+      models[1].transform.rotation.z = (models[1].transform.rotation.z * 3) / 4;
 
     S3L_rotationToDirections(models[1].transform.rotation, S3L_F, &carDirection,
                              0, 0);
@@ -257,17 +243,16 @@ int setupSmall3d(void) {
 
     int16_t friction = 0;
 
-    // if (state[SDL_SCANCODE_UP])
-    //   velocity =
-    //       S3L_min(MAX_VELOCITY, velocity + (velocity < 0 ? (2 * stepVelocity)
-    //                                                      : stepVelocity));
-    // else if (state[SDL_SCANCODE_DOWN])
-    //   velocity =
-    //       S3L_max(-MAX_VELOCITY, velocity - (velocity > 0 ? (2 *
-    //       stepVelocity)
-    //                                                       : stepVelocity));
-    // else
-    friction = 1;
+    if (M5Cardputer.Keyboard.isKeyPressed('2'))
+      velocity =
+          S3L_min(MAX_VELOCITY, velocity + (velocity < 0 ? (2 * stepVelocity)
+                                                         : stepVelocity));
+    else if (M5Cardputer.Keyboard.isKeyPressed('w'))
+      velocity =
+          S3L_max(-MAX_VELOCITY, velocity - (velocity > 0 ? (2 * stepVelocity)
+                                                          : stepVelocity));
+    else
+      friction = 1;
 
     models[1].transform.translation.x += (carDirection.x * step) / S3L_F;
     models[1].transform.translation.z += (carDirection.z * step) / S3L_F;
@@ -308,6 +293,7 @@ int setupSmall3d(void) {
     scene.camera.transform.rotation.y = models[1].transform.rotation.y;
 
     // sdlUpdate();
+    spr.pushSprite(0, 0);
 
     frame++;
   }
@@ -325,12 +311,25 @@ void draw_function(LovyanGFX *gfx) {
 
 void setup() {
   auto cfg = M5.config();
-  M5Cardputer.begin(cfg);
-  int textsize = M5Cardputer.Display.height() / 60;
-  if (textsize == 0) {
-    textsize = 1;
-  }
-  M5Cardputer.Display.setTextSize(textsize);
+  M5Cardputer.begin(cfg, true);
+
+  delay(1000);
+  Serial.begin(115200);
+  Serial.println();
+
+  // Initialise the TFT registers
+  tft.init();
+  tft.setRotation(1);
+
+  // Optionally set colour depth to 8 or 16 bits, default is 16 if not specified
+  // spr.setColorDepth(8);
+
+  // Create a sprite of defined size
+  spr.createSprite(240, 135);
+
+  // Clear the TFT screen to blue
+  tft.fillScreen(TFT_BLUE);
+
   setupSmall3d();
 }
 
